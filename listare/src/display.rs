@@ -65,6 +65,10 @@ fn list_dirs(dirs: &[EntryData]) {
     }
 }
 
+fn icompare_name(left: &EntryData, right: &EntryData) -> std::cmp::Ordering {
+    left.name.to_lowercase().cmp(&right.name.to_lowercase())
+}
+
 fn list_dir_entries(entries: fs::ReadDir) {
     // iterate and consume the entries, getting metadata for each entry
     let mut details = entries
@@ -87,8 +91,10 @@ fn list_dir_entries(entries: fs::ReadDir) {
         .collect::<Vec<EntryData>>();
 
     // sort them by their name
-    details.sort_by(|a, b| a.name.cmp(&b.name));    
-    tabulate::tabulate(&details);
+    details.sort_by(|a, b| icompare_name(a, b));
+    if !details.is_empty() {
+        println!("{}", tabulate::Tabulator::new(&details));
+    }
 }
 
 fn list_files(entries: &[EntryData]) {
