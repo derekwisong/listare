@@ -54,11 +54,16 @@ impl InputFiles {
 }
 
 fn list_dirs(dirs: &[EntryData]) {
-    for dir in dirs {
+    for (i, dir) in dirs.iter().enumerate() {
         if let Ok(entries) = fs::read_dir(&dir.name) {
-            // println!("{}:", &dir.name);
+            if dirs.len() > 1 {
+                println!("{}:", dir.name);
+            }
             list_dir_entries(entries);
-            // println!();
+            // if more than one and not the last directory, print a newline
+            if dirs.len() > 1 && i < dirs.len() - 1 {
+                println!();
+            }
         } else {
             eprintln!("Could not read directory: {}", &dir.name);
         }

@@ -34,7 +34,6 @@ fn get_line_length() -> usize {
             }
             else {
                 eprintln!("COLUMNS must be greater than 0");
-            
             }
         }
         else {
