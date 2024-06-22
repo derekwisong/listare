@@ -1,20 +1,25 @@
-use std::fs::{self, Metadata};
+use std::{
+    fmt::{self, Display},
+    fs::{self, Metadata},
+};
+
+use crate::tabulate;
 
 #[derive(Debug)]
-struct DirType {
-    entry: String,
+struct EntryData {
+    name: String,
     metadata: Metadata,
 }
 
-#[derive(Debug)]
-struct FileType {
-    entry: String,
-    metadata: Metadata,
+impl Display for EntryData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 pub struct InputFiles {
-    pub files: Vec<FileType>,
-    pub dirs: Vec<DirType>,
+    files: Vec<EntryData>,
+    dirs: Vec<EntryData>,
 }
 
 impl From<Vec<String>> for InputFiles {
@@ -24,13 +29,16 @@ impl From<Vec<String>> for InputFiles {
 
         for file in value {
             if let Ok(metadata) = fs::metadata(&file) {
-                if metadata.is_dir() {
-                    dirs.push(DirType { entry: file , metadata: metadata });
+                let entry = EntryData {
+                    name: file,
+                    metadata: metadata,
+                };
+                if entry.metadata.is_dir() {
+                    dirs.push(entry);
                 } else {
-                    files.push(FileType { entry: file, metadata: metadata });
+                    files.push(entry);
                 }
-            }
-            else {
+            } else {
                 eprintln!("Could not read metadata for file: {}", file);
             }
         }
@@ -45,63 +53,49 @@ impl InputFiles {
     }
 }
 
-fn list_dirs(dirs: &[DirType]) {
+fn list_dirs(dirs: &[EntryData]) {
     for dir in dirs {
-        if let Ok(entries) = fs::read_dir(&dir.entry) {
-            println!("{}:", dir.entry);
+        if let Ok(entries) = fs::read_dir(&dir.name) {
+            // println!("{}:", &dir.name);
             list_dir_entries(entries);
-            println!();
-        }
-        else {
-            eprintln!("Could not read directory: {}", dir.entry);
-        }
-    }
-
-}
-
-fn get_line_length() -> usize {
-    // get the environment variable COLUMNS
-    // if it is not greater-than 0, return 80
-    // otherwise, return the value of COLUMNS
-    let default: usize = 80;
-
-    if let Ok(val) = std::env::var("COLUMNS") {
-        if let Ok(num) = val.parse::<usize>() {
-            if num > 0 {
-                return num;
-            }
+            // println!();
+        } else {
+            eprintln!("Could not read directory: {}", &dir.name);
         }
     }
-    default
 }
 
 fn list_dir_entries(entries: fs::ReadDir) {
-    let line_length = get_line_length();
-    let min_column_width: usize = 3;  // 1 char for name 2 separating white space
-    let max_columns = std::cmp::max(1, line_length / min_column_width);
+    // iterate and consume the entries, getting metadata for each entry
+    let mut details = entries
+        .into_iter()
+        .filter_map(|e| {
+            let entry = e.ok()?;
+            if entry.file_name().is_empty() {
+                eprintln!("Could not read file name");
+                return None;
+            }
+            if entry.file_name().to_str()?.starts_with(".") {
+                // hidden file
+                return None;
+            }
+            Some(EntryData {
+                name: entry.file_name().to_string_lossy().to_string(),
+                metadata: entry.metadata().ok()?,
+            })
+        })
+        .collect::<Vec<EntryData>>();
 
-    for entry in entries.filter_map(|e| e.ok()) {
-        let display = match entry.file_type() {
-            Ok(ft) => {
-                if ft.is_dir() {
-                    format!("{}/", entry.file_name().to_string_lossy())
-                } 
-                else {
-                    entry.file_name().to_string_lossy().to_string()
-                }
-            
-            },
-            Err(_) => continue,
-        };
-        println!("{}",  display);
-    }
+    // sort them by their name
+    details.sort_by(|a, b| a.name.cmp(&b.name));    
+    tabulate::tabulate(&details);
 }
 
-fn list_files(files: &[FileType]) {
-    for file in files {
-        println!("{}", file.entry);
+fn list_files(entries: &[EntryData]) {
+    for file in entries {
+        println!("{}", file.name);
     }
-    if files.len() > 0 {
+    if entries.len() > 0 {
         println!();
     }
 }
