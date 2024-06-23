@@ -6,6 +6,13 @@ use std::{
 use crate::tabulate;
 
 #[derive(Debug)]
+pub struct Arguments {
+    pub max_line_length: usize,
+    pub inputs: InputFiles,
+    pub show_hidden: bool,
+}
+
+#[derive(Debug)]
 struct EntryData {
     name: String,
     metadata: Metadata,
@@ -17,6 +24,7 @@ impl Display for EntryData {
     }
 }
 
+#[derive(Debug)]
 pub struct InputFiles {
     files: Vec<EntryData>,
     dirs: Vec<EntryData>,
@@ -53,16 +61,16 @@ impl InputFiles {
     }
 }
 
-fn list_dirs(dirs: &[EntryData]) {
-    for (i, dir) in dirs.iter().enumerate() {
+fn list_dirs(args: &Arguments) {
+    for (i, dir) in args.inputs.dirs.iter().enumerate() {
         if let Ok(entries) = fs::read_dir(&dir.name) {
-            let multiple_dirs = dirs.len() > 1;
-            let last_dir = i == dirs.len() - 1;
+            let multiple_dirs = args.inputs.dirs.len() > 1;
+            let last_dir = i == args.inputs.dirs.len() - 1;
 
             if multiple_dirs {
                 println!("{}:", dir.name);
             }
-            list_dir_entries(entries);
+            list_dir_entries(entries, args);
             // if more than one and not the last directory, print a newline
             if multiple_dirs && !last_dir {
                 println!();
@@ -81,9 +89,14 @@ fn is_hidden(entry: &DirEntry) -> bool {
     use std::os::unix::ffi::OsStrExt;
     if cfg!(target_os = "linux") {
         // if linux, check if the first byte is a period
-        *entry.file_name().as_os_str().as_bytes().get(0).unwrap_or(&b' ') == b'.'
-    }
-    else {
+        *entry
+            .file_name()
+            .as_os_str()
+            .as_bytes()
+            .get(0)
+            .unwrap_or(&b' ')
+            == b'.'
+    } else {
         false
     }
 }
@@ -108,18 +121,22 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
         .collect::<Vec<EntryData>>()
 }
 
-fn list_dir_entries(dir: fs::ReadDir) {
+fn list_dir_entries(dir: fs::ReadDir, args: &Arguments) {
     // iterate and consume the entries, getting metadata for each entry
-    let mut entries = get_children(dir, false);
+    let mut entries = get_children(dir, args.show_hidden);
 
     // sort them by their name
     entries.sort_by(|a, b| icompare_name(a, b));
     if !entries.is_empty() {
-        println!("{}", tabulate::Tabulator::new(&entries));
+        println!(
+            "{}",
+            tabulate::Tabulator::new(&entries, args.max_line_length)
+        );
     }
 }
 
-fn list_files(entries: &[EntryData]) {
+fn list_files(args: &Arguments) {
+    let entries = &args.inputs.files;
     for file in entries {
         println!("{}", file.name);
     }
@@ -128,7 +145,7 @@ fn list_files(entries: &[EntryData]) {
     }
 }
 
-pub fn list(inputs: &InputFiles) {
-    list_files(&inputs.files);
-    list_dirs(&inputs.dirs);
+pub fn list(args: &Arguments) {
+    list_files(args);
+    list_dirs(args);
 }

@@ -4,6 +4,27 @@ mod winsize;
 use clap::{Arg, ArgAction, Command};
 use display::InputFiles;
 
+fn get_line_length() -> usize {
+    const DEFAULT: usize = 80;
+
+    // first try using the ioctl system call
+    if let Some(winsize) = crate::winsize::get_winsize() {
+        return winsize.cols;
+    }
+
+    // if that fails, try using the COLUMNS environment variable
+    if let Ok(val) = std::env::var("COLUMNS") {
+        if let Ok(num) = val.parse::<usize>() {
+            if num > 0 {
+                return num;
+            }
+        }
+    }
+
+    // if all else fails, return the default value
+    DEFAULT
+}
+
 fn main() {
     let matches = Command::new("listare")
         .version("0.1.0")
@@ -25,6 +46,11 @@ fn main() {
         )
         .get_matches();
 
-    let files = InputFiles::from_args(matches.get_many("files").unwrap().cloned().collect());
-    display::list(&files);
+    let args = display::Arguments {
+        max_line_length: get_line_length(),
+        inputs: InputFiles::from_args(matches.get_many("files").unwrap().cloned().collect()),
+        show_hidden: matches.get_flag("all"),
+    };
+
+    display::list(&args);
 }
