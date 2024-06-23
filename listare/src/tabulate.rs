@@ -1,4 +1,5 @@
 use std::{cmp::{max, min}, error::Error};
+use crate::winsize::get_winsize;
 
 #[derive(Debug)]
 struct ColumnConfiguration {
@@ -26,24 +27,25 @@ fn get_line_length() -> usize {
     // get the environment variable COLUMNS
     // if it is not greater-than 0, return 80
     // otherwise, return the value of COLUMNS
-    let default: usize = 80;
+    const DEFAULT: usize = 80;
+
+    // first try using the ioctl system call
+    if let Some(winsize) = get_winsize() {
+        return winsize.cols;
+    }
+
+    // if that fails, try using the COLUMNS environment variable
     if let Ok(val) = std::env::var("COLUMNS") {
         if let Ok(num) = val.parse::<usize>() {
             if num > 0 {
                 return num;
             }
-            else {
-                eprintln!("COLUMNS must be greater than 0");
-            }
         }
-        else {
-            eprintln!("Could not parse COLUMNS environment variable");
-        }
+
     }
-    else {
-        eprintln!("Could not read COLUMNS environment variable");
-    }
-    default
+
+    // if all else fails, return the default value
+    DEFAULT
 }
 
 #[derive(Debug)]

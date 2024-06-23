@@ -1,5 +1,6 @@
 mod display;
 mod tabulate;
+mod winsize;
 use clap::{Arg, ArgAction, Command};
 use display::InputFiles;
 

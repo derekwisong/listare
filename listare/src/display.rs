@@ -1,6 +1,6 @@
 use std::{
     fmt::{self, Display},
-    fs::{self, Metadata},
+    fs::{self, DirEntry, Metadata},
 };
 
 use crate::tabulate;
@@ -56,12 +56,15 @@ impl InputFiles {
 fn list_dirs(dirs: &[EntryData]) {
     for (i, dir) in dirs.iter().enumerate() {
         if let Ok(entries) = fs::read_dir(&dir.name) {
-            if dirs.len() > 1 {
+            let multiple_dirs = dirs.len() > 1;
+            let last_dir = i == dirs.len() - 1;
+
+            if multiple_dirs {
                 println!("{}:", dir.name);
             }
             list_dir_entries(entries);
             // if more than one and not the last directory, print a newline
-            if dirs.len() > 1 && i < dirs.len() - 1 {
+            if multiple_dirs && !last_dir {
                 println!();
             }
         } else {
@@ -74,17 +77,26 @@ fn icompare_name(left: &EntryData, right: &EntryData) -> std::cmp::Ordering {
     left.name.to_lowercase().cmp(&right.name.to_lowercase())
 }
 
-fn list_dir_entries(entries: fs::ReadDir) {
-    // iterate and consume the entries, getting metadata for each entry
-    let mut details = entries
-        .into_iter()
+fn is_hidden(entry: &DirEntry) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    if cfg!(target_os = "linux") {
+        // if linux, check if the first byte is a period
+        *entry.file_name().as_os_str().as_bytes().get(0).unwrap_or(&b' ') == b'.'
+    }
+    else {
+        false
+    }
+}
+
+fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
+    dir.into_iter()
         .filter_map(|e| {
             let entry = e.ok()?;
             if entry.file_name().is_empty() {
-                eprintln!("Could not read file name");
+                eprintln!("Could not read file name of {:?}", entry);
                 return None;
             }
-            if entry.file_name().to_str()?.starts_with(".") {
+            if !include_hidden && is_hidden(&entry) {
                 // hidden file
                 return None;
             }
@@ -93,12 +105,17 @@ fn list_dir_entries(entries: fs::ReadDir) {
                 metadata: entry.metadata().ok()?,
             })
         })
-        .collect::<Vec<EntryData>>();
+        .collect::<Vec<EntryData>>()
+}
+
+fn list_dir_entries(dir: fs::ReadDir) {
+    // iterate and consume the entries, getting metadata for each entry
+    let mut entries = get_children(dir, false);
 
     // sort them by their name
-    details.sort_by(|a, b| icompare_name(a, b));
-    if !details.is_empty() {
-        println!("{}", tabulate::Tabulator::new(&details));
+    entries.sort_by(|a, b| icompare_name(a, b));
+    if !entries.is_empty() {
+        println!("{}", tabulate::Tabulator::new(&entries));
     }
 }
 
