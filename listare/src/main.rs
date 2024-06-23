@@ -34,7 +34,7 @@ fn main() {
             Arg::new("files")
                 .value_name("FILE")
                 .help("The file(s) to list information about")
-                .default_value("/etc")
+                .default_value(".")
                 .num_args(1..),
         )
         .arg(
