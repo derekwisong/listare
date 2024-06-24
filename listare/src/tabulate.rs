@@ -3,6 +3,10 @@ use std::{
     error::Error,
 };
 
+pub trait CharacterLength {
+    fn characters_long(&self) -> usize;
+}
+
 #[derive(Debug)]
 struct ColumnConfiguration {
     num_columns: usize,     // number of columns
@@ -52,7 +56,7 @@ fn get_column_config<T>(
     max_line_length: usize,
 ) -> Result<ColumnConfiguration, ConfigError>
 where
-    T: std::fmt::Display,
+    T: CharacterLength,
 {
     if data.is_empty() {
         return Err(ConfigError::EmptyData);
@@ -64,8 +68,6 @@ where
 
     // iterate over each file and determine the column widths for each configuration
     for (file_idx, entry) in data.iter().enumerate() {
-        let text = format!("{}", entry);
-
         // for each configuration determine if the current file fits
         for config in configs.as_mut_slice() {
             if !config.valid {
@@ -75,7 +77,7 @@ where
             // for horizontal use this instead:
             // let col_idx = file_idx % config.num_columns;
             let col_idx = file_idx / ((data.len() + config.num_columns - 1) / (config.num_columns));
-            let real_len = text.len()
+            let real_len = entry.characters_long()
                 + (if col_idx == config.num_columns - 1 {
                     0
                 } else {
@@ -118,6 +120,7 @@ impl<'a, T> Tabulator<'a, T> {
 impl<'a, T> std::fmt::Display for Tabulator<'a, T>
 where
     T: std::fmt::Display,
+    T: CharacterLength,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let config = match get_column_config(self.data, self.max_line_length) {
@@ -139,8 +142,7 @@ where
                 let idx = row + (col * rows);
                 if idx < self.data.len() {
                     let entry = &self.data[idx];
-                    let text = format!("{}", entry);
-                    write!(f, "{:width$}", text, width = config.col_widths[col])?;
+                    write!(f, "{:width$}", entry, width = config.col_widths[col])?;
                 }
             }
             // if not the last row, print a newline

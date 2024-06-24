@@ -1,9 +1,11 @@
 use std::{
     fmt::{self, Display},
     fs::{self, DirEntry, Metadata},
+    path::PathBuf,
 };
 
 use crate::tabulate;
+use colored::{ColoredString, Colorize};
 
 #[derive(Debug)]
 pub struct Arguments {
@@ -16,11 +18,41 @@ pub struct Arguments {
 struct EntryData {
     name: String,
     metadata: Metadata,
+    path: PathBuf,
+}
+
+impl EntryData {
+    fn colored_name(&self) -> ColoredString {
+        if self.metadata.is_symlink() {
+            let link_exists = fs::metadata(&self.path).is_ok();
+
+            if link_exists {
+                self.name.bold().cyan()
+            } else {
+                self.name.bold().red()
+            }
+        } else if self.metadata.is_dir() {
+            self.name.bold().blue()
+        } else {
+            self.name.normal()
+        }
+    }
 }
 
 impl Display for EntryData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)
+        write!(
+            f,
+            "{:width$}",
+            self.colored_name(),
+            width = f.width().unwrap_or(self.name.chars().count())
+        )
+    }
+}
+
+impl tabulate::CharacterLength for EntryData {
+    fn characters_long(&self) -> usize {
+        self.name.chars().count()
     }
 }
 
@@ -38,8 +70,9 @@ impl From<Vec<String>> for InputFiles {
         for file in value {
             if let Ok(metadata) = fs::metadata(&file) {
                 let entry = EntryData {
-                    name: file,
+                    name: file.clone(),
                     metadata: metadata,
+                    path: PathBuf::from(file),
                 };
                 if entry.metadata.is_dir() {
                     dirs.push(entry);
@@ -116,6 +149,7 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
             Some(EntryData {
                 name: entry.file_name().to_string_lossy().to_string(),
                 metadata: entry.metadata().ok()?,
+                path: entry.path(),
             })
         })
         .collect::<Vec<EntryData>>()
