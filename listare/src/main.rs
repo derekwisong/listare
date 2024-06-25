@@ -1,8 +1,7 @@
-mod display;
-mod tabulate;
 mod winsize;
 use clap::{Arg, ArgAction, Command};
-use display::InputFiles;
+
+use listare;
 
 fn get_line_length() -> usize {
     const DEFAULT: usize = 80;
@@ -25,8 +24,17 @@ fn get_line_length() -> usize {
     DEFAULT
 }
 
+fn parse_arguments(command: Command) -> listare::Arguments {
+    let matches = command.get_matches();
+    listare::Arguments {
+        max_line_length: get_line_length(),
+        inputs: listare::InputFiles::from_args(matches.get_many("files").unwrap().cloned().collect()),
+        show_hidden: matches.get_flag("all"),
+    }
+}
+
 fn main() {
-    let matches = Command::new("listare")
+    let cmd = Command::new("listare")
         .version("0.1.0")
         .author("Derek Wisong <derekwisong@gmail.com>")
         .about("My version of `ls`")
@@ -43,14 +51,7 @@ fn main() {
                 .long("all")
                 .action(ArgAction::SetTrue)
                 .help("Show hidden files (do not ignore entries starting with .)"),
-        )
-        .get_matches();
-
-    let args = display::Arguments {
-        max_line_length: get_line_length(),
-        inputs: InputFiles::from_args(matches.get_many("files").unwrap().cloned().collect()),
-        show_hidden: matches.get_flag("all"),
-    };
-
-    display::list(&args);
+        );
+    let args = parse_arguments(cmd);
+    listare::list(&args);
 }
