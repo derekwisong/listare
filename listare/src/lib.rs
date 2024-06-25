@@ -6,15 +6,17 @@ use std::{
 
 mod tabulate;
 use colored::{ColoredString, Colorize};
+use tabulate::CharacterLength;
 
 #[derive(Debug)]
 pub struct Arguments {
     pub max_line_length: usize,
     pub inputs: InputFiles,
     pub show_hidden: bool,
+    pub by_lines: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct EntryData {
     name: String,
     metadata: Metadata,
@@ -45,7 +47,7 @@ impl Display for EntryData {
             f,
             "{:width$}",
             self.colored_name(),
-            width = f.width().unwrap_or(self.name.chars().count())
+            width = f.width().unwrap_or(self.characters_long())
         )
     }
 }
@@ -56,6 +58,7 @@ impl tabulate::CharacterLength for EntryData {
     }
 }
 
+/// The files and directories that the user passed in as cli arguments
 #[derive(Debug)]
 pub struct InputFiles {
     files: Vec<EntryData>,
@@ -91,26 +94,6 @@ impl From<Vec<String>> for InputFiles {
 impl InputFiles {
     pub fn from_args(files: Vec<String>) -> Self {
         InputFiles::from(files)
-    }
-}
-
-fn list_dirs(args: &Arguments) {
-    for (i, dir) in args.inputs.dirs.iter().enumerate() {
-        if let Ok(entries) = fs::read_dir(&dir.name) {
-            let multiple_dirs = args.inputs.dirs.len() > 1;
-            let last_dir = i == args.inputs.dirs.len() - 1;
-
-            if multiple_dirs {
-                println!("{}:", dir.name);
-            }
-            list_dir_entries(entries, args);
-            // if more than one and not the last directory, print a newline
-            if multiple_dirs && !last_dir {
-                println!();
-            }
-        } else {
-            eprintln!("Could not read directory: {}", &dir.name);
-        }
     }
 }
 
@@ -155,31 +138,68 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
         .collect::<Vec<EntryData>>()
 }
 
-fn list_dir_entries(dir: fs::ReadDir, args: &Arguments) {
-    // iterate and consume the entries, getting metadata for each entry
-    let mut entries = get_children(dir, args.show_hidden);
+fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
+    println!(
+        "{}",
+        tabulate::Tabulator::new(
+            &entries,
+            args.max_line_length,
+            if args.by_lines {
+                tabulate::TabulateOrientation::Rows
+            } else {
+                tabulate::TabulateOrientation::Columns
+            }
+        )
+    );
+}
 
-    // sort them by their name
+fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
     entries.sort_by(|a, b| icompare_name(a, b));
-    if !entries.is_empty() {
-        println!(
-            "{}",
-            tabulate::Tabulator::new(&entries, args.max_line_length)
-        );
-    }
+
+    // based on the type of view, display them (tabulate only for now)
+    tabulate_entries(&entries, args);
 }
 
-fn list_files(args: &Arguments) {
-    let entries = &args.inputs.files;
-    for file in entries {
-        println!("{}", file.name);
+fn list_dirs(args: &Arguments, headings: bool) -> Result<(), ListareError> {
+    for (i, dir) in args.inputs.dirs.iter().enumerate() {
+        if let Ok(entries) = fs::read_dir(&dir.name) {
+            if headings {
+                println!("{}:", dir.name);
+            }
+
+            list_entries(get_children(entries, args.show_hidden), args);
+
+            if i != args.inputs.dirs.len() - 1 {
+                println!();
+            }
+        } else {
+            eprintln!("Could not read directory: {}", &dir.name);
+        }
     }
-    if entries.len() > 0 {
-        println!();
-    }
+    Ok(())
 }
 
-pub fn list(args: &Arguments) {
-    list_files(args);
-    list_dirs(args);
+pub enum ListareError {
+    Unknown,
+    Generic(String),
+}
+
+pub fn run(args: &Arguments) -> Result<(), ListareError> {
+    if !args.inputs.files.is_empty() {
+        list_entries(args.inputs.files.clone(), args);
+    }
+
+    if !args.inputs.dirs.is_empty() {
+        // show headings when there are multiple dirs or files and one or more dirs
+        let had_files = !args.inputs.files.is_empty();
+
+        if had_files {
+            println!();
+        }
+
+        let headings: bool = had_files || (args.inputs.dirs.len() > 1);
+        list_dirs(args, headings)?;
+    }
+
+    Ok(())
 }

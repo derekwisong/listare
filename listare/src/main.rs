@@ -1,6 +1,5 @@
 mod winsize;
 use clap::{Arg, ArgAction, Command};
-
 use listare;
 
 fn get_line_length() -> usize {
@@ -30,6 +29,7 @@ fn parse_arguments(command: Command) -> listare::Arguments {
         max_line_length: get_line_length(),
         inputs: listare::InputFiles::from_args(matches.get_many("files").unwrap().cloned().collect()),
         show_hidden: matches.get_flag("all"),
+        by_lines: matches.get_flag("bylines"),
     }
 }
 
@@ -51,7 +51,25 @@ fn main() {
                 .long("all")
                 .action(ArgAction::SetTrue)
                 .help("Show hidden files (do not ignore entries starting with .)"),
+        )
+        .arg(
+            Arg::new("bylines")
+                .short('x')
+                .action(ArgAction::SetTrue)
+                .help("List entries by lines instead of by columns")
         );
+
     let args = parse_arguments(cmd);
-    listare::list(&args);
+
+    match listare::run(&args) {
+        Ok(()) => {}, // do nothing on success
+        Err(listare::ListareError::Generic(msg)) => {
+            eprintln!("{}", msg);
+            std::process::exit(1);
+        },
+        Err(listare::ListareError::Unknown) => {
+            eprintln!("An unknown error occurred");
+            std::process::exit(1);
+        },
+    };
 }
