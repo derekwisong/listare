@@ -133,7 +133,7 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
                 path: entry.path(),
             })
         })
-        .collect::<Vec<EntryData>>()
+        .collect()
 }
 
 fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
@@ -160,12 +160,12 @@ fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
 
 fn list_dirs(args: &Arguments, headings: bool) -> Result<(), ListareError> {
     for (i, dir) in args.inputs.dirs.iter().enumerate() {
-        if let Ok(entries) = fs::read_dir(&dir.name) {
+        if let Ok(dir_iter) = fs::read_dir(&dir.name) {
             if headings {
                 println!("{}:", dir.name);
             }
 
-            list_entries(get_children(entries, args.show_hidden), args);
+            list_entries(get_children(dir_iter, args.show_hidden), args);
 
             if i != args.inputs.dirs.len() - 1 {
                 println!();

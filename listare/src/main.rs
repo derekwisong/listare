@@ -68,7 +68,6 @@ fn main() {
     let _ = listare::posix::setlocale(listare::posix::Locale::UserPreferred);
 
     match listare::run(&args) {
-        Ok(()) => {} // do nothing on success
         Err(listare::ListareError::Generic(msg)) => {
             eprintln!("{}", msg);
             std::process::exit(1);
@@ -76,6 +75,7 @@ fn main() {
         Err(listare::ListareError::Unknown) => {
             eprintln!("An unknown error occurred");
             std::process::exit(1);
-        }
+        },
+        Ok(_) => {}
     };
 }
