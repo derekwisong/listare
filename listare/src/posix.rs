@@ -57,9 +57,9 @@ pub fn strcoll(a: &str, b: &str) -> std::cmp::Ordering {
 
 #[derive(Debug)]
 pub enum LocaleError {
-    NullByte,         // the provided input locale contains a null byte
-    LocaleError,      // call to setlocale failed
-    ConversionError,  // error converting setlocale result to str
+    NullByte,        // the provided input locale contains a null byte
+    LocaleError,     // call to setlocale failed
+    ConversionError, // error converting setlocale result to str
 }
 
 impl std::fmt::Display for LocaleError {
@@ -74,7 +74,16 @@ impl std::fmt::Display for LocaleError {
 
 impl std::error::Error for LocaleError {}
 
-pub fn setlocale(locale: &str) -> Result<&str, LocaleError> {
+pub enum Locale<'a> {
+    UserPreferred,
+    Named(&'a str),
+}
+
+pub fn setlocale(locale: Locale) -> Result<&str, LocaleError> {
+    let locale = match locale {
+        Locale::UserPreferred => "",
+        Locale::Named(locale) => locale,
+    };
     match std::ffi::CString::new(locale) {
         Err(_) => Err(LocaleError::NullByte),
         Ok(locale) => unsafe {
@@ -85,7 +94,7 @@ pub fn setlocale(locale: &str) -> Result<&str, LocaleError> {
                 let result_str = std::ffi::CStr::from_ptr(result);
                 match result_str.to_str() {
                     Err(_) => Err(LocaleError::ConversionError),
-                    Ok(result) => Ok(result)
+                    Ok(result) => Ok(result),
                 }
             }
         },

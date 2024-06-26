@@ -1,5 +1,7 @@
 // testing the locale functions
 
+use listare::posix::{setlocale, Locale};
+
 fn main() {
     let locales = [
         "",
@@ -11,7 +13,7 @@ fn main() {
     ];
 
     for locale in &locales {
-        match listare::posix::setlocale(locale) {
+        match setlocale(Locale::Named(locale)) {
             Ok(current_locale) => {
                 println!("setlocale('{}') -> '{}'", locale, current_locale);
             }

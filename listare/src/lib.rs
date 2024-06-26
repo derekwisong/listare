@@ -4,8 +4,8 @@ use std::{
     path::PathBuf,
 };
 
-mod tabulate;
 pub mod posix;
+mod tabulate;
 
 use colored::{ColoredString, Colorize};
 use tabulate::CharacterLength;

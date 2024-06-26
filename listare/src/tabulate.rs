@@ -53,7 +53,7 @@ impl std::fmt::Display for ConfigError {
 
 pub enum TabulateOrientation {
     Columns,
-    Rows
+    Rows,
 }
 
 /// A tabulator for displaying data in columns
@@ -71,11 +71,12 @@ impl<'a, T> Tabulator<'a, T> {
         if self.data.is_empty() {
             return Err(ConfigError::EmptyData);
         }
-    
+
         // Create a column configuration for each possible number of columns
         const MIN_COLUMN_WIDTH: usize = 3; // 1 char for name 2 separating white space
-        let mut configs = init_column_configs(self.max_line_length, self.data.len(), MIN_COLUMN_WIDTH);
-    
+        let mut configs =
+            init_column_configs(self.max_line_length, self.data.len(), MIN_COLUMN_WIDTH);
+
         // iterate over each file and determine the column widths for each configuration
         for (file_idx, entry) in self.data.iter().enumerate() {
             // for each configuration determine if the current file fits
@@ -83,10 +84,13 @@ impl<'a, T> Tabulator<'a, T> {
                 if !config.valid {
                     continue;
                 }
-    
+
                 let col_idx = match self.orientation {
                     TabulateOrientation::Rows => file_idx % config.num_columns,
-                    TabulateOrientation::Columns => file_idx / ((self.data.len() + config.num_columns - 1) / (config.num_columns)),
+                    TabulateOrientation::Columns => {
+                        file_idx
+                            / ((self.data.len() + config.num_columns - 1) / (config.num_columns))
+                    }
                 };
                 // for horizontal use this instead:
                 // let col_idx = file_idx % config.num_columns;
@@ -97,7 +101,7 @@ impl<'a, T> Tabulator<'a, T> {
                     } else {
                         2
                     });
-    
+
                 // update the config if the column width is too small
                 if config.col_widths[col_idx] < real_len {
                     config.line_len += real_len - config.col_widths[col_idx];
@@ -107,7 +111,7 @@ impl<'a, T> Tabulator<'a, T> {
                 }
             }
         }
-    
+
         // find the configuration with the largest number of columns that fits within the line length
         let position = configs.iter().rposition(|config| config.valid).unwrap_or(0);
         // TODO may panic when data empty (max columns will be 0, therefore configs will be empty)

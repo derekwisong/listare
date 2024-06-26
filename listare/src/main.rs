@@ -2,25 +2,22 @@
 use clap::{Arg, ArgAction, Command};
 use listare;
 
-fn get_line_length() -> usize {
-    const DEFAULT: usize = 80;
-
-    // first try using the ioctl system call
+fn get_terminal_width() -> Option<usize> {
     if let Some(winsize) = listare::posix::get_winsize() {
-        return winsize.cols;
-    }
-
-    // if that fails, try using the COLUMNS environment variable
-    if let Ok(val) = std::env::var("COLUMNS") {
+        Some(winsize.cols)
+    } else if let Ok(val) = std::env::var("COLUMNS") {
         if let Ok(num) = val.parse::<usize>() {
             if num > 0 {
-                return num;
+                Some(num)
+            } else {
+                None
             }
+        } else {
+            None
         }
+    } else {
+        None
     }
-
-    // if all else fails, return the default value
-    DEFAULT
 }
 
 fn build_command() -> Command {
@@ -50,10 +47,12 @@ fn build_command() -> Command {
         )
 }
 
-fn parse_arguments(command: Command) -> listare::Arguments {
+fn parse_args() -> listare::Arguments {
+    let command = build_command();
     let matches = command.get_matches();
+
     listare::Arguments {
-        max_line_length: get_line_length(),
+        max_line_length: get_terminal_width().unwrap_or(80),
         inputs: listare::InputFiles::from_args(
             matches.get_many("files").unwrap().cloned().collect(),
         ),
@@ -62,17 +61,12 @@ fn parse_arguments(command: Command) -> listare::Arguments {
     }
 }
 
-fn env_setup() {
-    // set user's preferred locale by using the empty string
-    // locale is important as sorting with strcoll is locale-aware
-    if let Err(msg) = listare::posix::setlocale("") {
-        eprintln!("Could not set locale: {}", msg);  // a debug message, perhpas introduce a verbose mode
-    }
-}
-
 fn main() {
-    let args = parse_arguments(build_command());
-    env_setup();
+    let args = parse_args();
+
+    // sorting by name is done with strcoll, which is locale-aware
+    let _ = listare::posix::setlocale(listare::posix::Locale::UserPreferred);
+
     match listare::run(&args) {
         Ok(()) => {} // do nothing on success
         Err(listare::ListareError::Generic(msg)) => {
