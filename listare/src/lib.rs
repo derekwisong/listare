@@ -5,6 +5,8 @@ use std::{
 };
 
 mod tabulate;
+pub mod posix;
+
 use colored::{ColoredString, Colorize};
 use tabulate::CharacterLength;
 
@@ -97,10 +99,6 @@ impl InputFiles {
     }
 }
 
-fn icompare_name(left: &EntryData, right: &EntryData) -> std::cmp::Ordering {
-    left.name.to_lowercase().cmp(&right.name.to_lowercase())
-}
-
 fn is_hidden(entry: &DirEntry) -> bool {
     use std::os::unix::ffi::OsStrExt;
     if cfg!(target_os = "linux") {
@@ -154,7 +152,7 @@ fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
 }
 
 fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
-    entries.sort_by(|a, b| icompare_name(a, b));
+    entries.sort_by(|a, b| posix::strcoll(&a.name, &b.name));
 
     // based on the type of view, display them (tabulate only for now)
     tabulate_entries(&entries, args);
