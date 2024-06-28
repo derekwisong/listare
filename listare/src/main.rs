@@ -53,9 +53,10 @@ fn parse_args() -> listare::Arguments {
 
     listare::Arguments {
         max_line_length: get_terminal_width().unwrap_or(80),
-        inputs: listare::InputFiles::from_args(
-            matches.get_many("files").unwrap().cloned().collect(),
-        ),
+        paths: matches.get_many("files").unwrap().cloned().collect(),
+        // inputs: listare::InputFiles::from_args(
+        //     matches.get_many("files").unwrap().cloned().collect(),
+        // ),
         show_hidden: matches.get_flag("all"),
         by_lines: matches.get_flag("bylines"),
     }

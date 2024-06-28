@@ -13,19 +13,51 @@ use tabulate::CharacterLength;
 #[derive(Debug)]
 pub struct Arguments {
     pub max_line_length: usize,
-    pub inputs: InputFiles,
+    pub paths: Vec<String>,
     pub show_hidden: bool,
     pub by_lines: bool,
 }
 
 #[derive(Clone, Debug)]
 struct EntryData {
-    name: String,
     metadata: Metadata,
     path: PathBuf,
+    name: String,
 }
 
 impl EntryData {
+    fn from_path_str(path: &str) -> Result<Self, std::io::Error> {
+        let metadata = fs::metadata(&path)?;
+        let path = PathBuf::from(path);
+        let name = path
+            .file_name()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_str()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_string();
+        Ok(EntryData {
+            metadata,
+            path,
+            name,
+        })
+    }
+
+    fn from_direntry(entry: DirEntry) -> Result<Self, std::io::Error> {
+        let metadata = entry.metadata()?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_str()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_string();
+        Ok(EntryData {
+            metadata,
+            path,
+            name,
+        })
+    }
+
     fn colored_name(&self) -> ColoredString {
         if self.metadata.is_symlink() {
             let link_exists = fs::metadata(&self.path).is_ok();
@@ -60,45 +92,6 @@ impl tabulate::CharacterLength for EntryData {
     }
 }
 
-/// The files and directories that the user passed in as cli arguments
-#[derive(Debug)]
-pub struct InputFiles {
-    files: Vec<EntryData>,
-    dirs: Vec<EntryData>,
-}
-
-impl From<Vec<String>> for InputFiles {
-    fn from(value: Vec<String>) -> Self {
-        let mut files = Vec::new();
-        let mut dirs = Vec::new();
-
-        for file in value {
-            if let Ok(metadata) = fs::metadata(&file) {
-                let entry = EntryData {
-                    name: file.clone(),
-                    metadata: metadata,
-                    path: PathBuf::from(file),
-                };
-                if entry.metadata.is_dir() {
-                    dirs.push(entry);
-                } else {
-                    files.push(entry);
-                }
-            } else {
-                eprintln!("Could not read metadata for file: {}", file);
-            }
-        }
-
-        InputFiles { files, dirs }
-    }
-}
-
-impl InputFiles {
-    pub fn from_args(files: Vec<String>) -> Self {
-        InputFiles::from(files)
-    }
-}
-
 fn is_hidden(entry: &DirEntry) -> bool {
     use std::os::unix::ffi::OsStrExt;
     if cfg!(target_os = "linux") {
@@ -127,11 +120,7 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
                 // hidden file
                 return None;
             }
-            Some(EntryData {
-                name: entry.file_name().to_string_lossy().to_string(),
-                metadata: entry.metadata().ok()?,
-                path: entry.path(),
-            })
+            Some(EntryData::from_direntry(entry).ok()?)
         })
         .collect()
 }
