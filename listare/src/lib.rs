@@ -148,8 +148,8 @@ fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
     tabulate_entries(&entries, args);
 }
 
-fn list_dirs(args: &Arguments, headings: bool) -> Result<(), ListareError> {
-    for (i, dir) in args.inputs.dirs.iter().enumerate() {
+fn list_dirs(dirs: &[EntryData], args: &Arguments, headings: bool) -> Result<(), ListareError> {
+    for (i, dir) in dirs.iter().enumerate() {
         if let Ok(dir_iter) = fs::read_dir(&dir.name) {
             if headings {
                 println!("{}:", dir.name);
@@ -157,7 +157,7 @@ fn list_dirs(args: &Arguments, headings: bool) -> Result<(), ListareError> {
 
             list_entries(get_children(dir_iter, args.show_hidden), args);
 
-            if i != args.inputs.dirs.len() - 1 {
+            if i != dirs.len() - 1 {
                 println!();
             }
         } else {
@@ -183,30 +183,49 @@ impl fmt::Display for ListareError {
     }
 }
 
-pub fn run(args: &Arguments) -> Result<(), ListareError> {
-    if args.list_dir_content {
-        if !args.inputs.files.is_empty() {
-            list_entries(args.inputs.files.clone(), args);
+fn split_files_dirs(paths: &[String]) -> (Vec<EntryData>, Vec<EntryData>) {
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
+
+    for path in paths {
+        if let Ok(entry) = EntryData::from_path_str(path) {
+            if entry.metadata.is_dir() {
+                dirs.push(entry);
+            } else {
+                files.push(entry);
+            }
         }
+    }
+
+    (files, dirs)
+}
+
+pub fn run(args: &Arguments) -> Result<(), ListareError> {
     
-        if !args.inputs.dirs.is_empty() {
-            // show headings when there are multiple dirs or files and one or more dirs
-            let had_files = !args.inputs.files.is_empty();
-    
+    if args.list_dir_content {
+        let (files, dirs) = split_files_dirs(&args.paths);
+        let had_files = !files.is_empty();
+
+        if had_files {
+            list_entries(files, args);
+        }
+
+        if !dirs.is_empty() {
             if had_files {
                 println!();
             }
-    
-            let headings: bool = had_files || (args.inputs.dirs.len() > 1);
-            list_dirs(args, headings)?;
-        }
-    }
-    else {
-        let entries_iter = args.inputs.files.iter().chain(args.inputs.dirs.iter());
-        let entries: Vec<EntryData> = entries_iter.cloned().collect();
-        list_entries(entries, args);
 
+            let headings: bool = had_files || (dirs.len() > 1);
+            list_dirs(&dirs, args, headings)?;
+        }
+    } else {
+        let entries = args
+            .paths
+            .iter()
+            .filter_map(|path| EntryData::from_path_str(path).ok())
+            .collect();
+        list_entries(entries, args);
     }
-    
+
     Ok(())
 }
