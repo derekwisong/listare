@@ -47,6 +47,13 @@ fn build_command() -> Command {
                 .help("List directories themselves, not their contents"),
         )
         .arg(
+            Arg::new("long")
+                .short('l')
+                .long("long")
+                .action(ArgAction::SetTrue)
+                .help("Use a long listing format"),
+        )
+        .arg(
             Arg::new("bylines")
                 .short('x')
                 .action(ArgAction::SetTrue)
@@ -64,6 +71,7 @@ fn parse_args() -> listare::Arguments {
         list_dir_content: !matches.get_flag("directory"),
         show_hidden: matches.get_flag("all"),
         by_lines: matches.get_flag("bylines"),
+        long_format: matches.get_flag("long"),
     }
 }
 

@@ -1,7 +1,5 @@
 use std::{
-    fmt::{self, Display},
-    fs::{self, DirEntry, Metadata},
-    path::PathBuf,
+    fmt::{self, Display}, fs::{self, DirEntry, Metadata}, os::unix::fs::MetadataExt, path::PathBuf
 };
 
 pub mod posix;
@@ -17,6 +15,7 @@ pub struct Arguments {
     pub list_dir_content: bool,
     pub show_hidden: bool,
     pub by_lines: bool,
+    pub long_format: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -27,15 +26,10 @@ struct EntryData {
 }
 
 impl EntryData {
-    fn from_path_str(path: &str) -> Result<Self, std::io::Error> {
-        let metadata = fs::metadata(&path)?;
-        let path = PathBuf::from(path);
-        let name = path
-            .file_name()
-            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
-            .to_str()
-            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
-            .to_string();
+    fn from_path_str(path_str: &str) -> Result<Self, std::io::Error> {
+        let metadata = fs::metadata(&path_str)?;
+        let path = fs::canonicalize(&path_str)?;
+        let name = path_str.to_string();
         Ok(EntryData {
             metadata,
             path,
@@ -49,8 +43,7 @@ impl EntryData {
         let name = path
             .file_name()
             .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
-            .to_str()
-            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_string_lossy()
             .to_string();
         Ok(EntryData {
             metadata,
@@ -127,6 +120,10 @@ fn get_children(dir: fs::ReadDir, include_hidden: bool) -> Vec<EntryData> {
 }
 
 fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
+    if entries.is_empty() {
+        return;
+    }
+
     println!(
         "{}",
         tabulate::Tabulator::new(
@@ -141,16 +138,60 @@ fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
     );
 }
 
+fn longformat_tabulate_entries(entries: &[EntryData], _args: &Arguments) {
+    for entry in entries {
+        if entry.metadata.is_dir() {
+            print!("d");
+        } else {
+            print!("-");
+        }
+        // print -rwx items for user, group, and other users
+        for perm in &[
+            (0o400, 'r'),
+            (0o200, 'w'),
+            (0o100, 'x'),
+            (0o040, 'r'),
+            (0o020, 'w'),
+            (0o010, 'x'),
+            (0o004, 'r'),
+            (0o002, 'w'),
+            (0o001, 'x'),
+        ] {
+            if entry.metadata.mode() & perm.0 != 0 {
+                print!("{}", perm.1);
+            } else {
+                print!("-");
+            }
+        }
+        
+
+        let links = entry.metadata.nlink();
+        let user = users::get_user_by_uid(entry.metadata.uid()).map(|u| u.name().to_string_lossy().to_string()).unwrap_or_default();
+        let group = users::get_group_by_gid(entry.metadata.gid()).map(|g| g.name().to_string_lossy().to_string()).unwrap_or_default();
+        let size = if entry.metadata.is_dir() { 0 } else { entry.metadata.len() };  // TODO: should have a value for dirs
+        let name = entry.colored_name();
+        
+        let modified = entry.metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
+        let modified = modified.map(|t| chrono::DateTime::from_timestamp(t.as_secs() as i64, 0)).expect("Could not get modified time");
+        let modified = modified.map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default();
+
+        println!(". {} {} {} {} {} {}", links, user, group, size, modified, name);
+    }
+}
+
 fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
     entries.sort_by(|a, b| posix::strcoll(&a.name, &b.name));
 
-    // based on the type of view, display them (tabulate only for now)
-    tabulate_entries(&entries, args);
+    if args.long_format {
+        longformat_tabulate_entries(&entries, args);
+    } else {
+        tabulate_entries(&entries, args);
+    }
 }
 
 fn list_dirs(dirs: &[EntryData], args: &Arguments, headings: bool) -> Result<(), ListareError> {
     for (i, dir) in dirs.iter().enumerate() {
-        if let Ok(dir_iter) = fs::read_dir(&dir.name) {
+        if let Ok(dir_iter) = fs::read_dir(&dir.path) {
             if headings {
                 println!("{}:", dir.name);
             }
@@ -201,7 +242,6 @@ fn split_files_dirs(paths: &[String]) -> (Vec<EntryData>, Vec<EntryData>) {
 }
 
 pub fn run(args: &Arguments) -> Result<(), ListareError> {
-    
     if args.list_dir_content {
         let (files, dirs) = split_files_dirs(&args.paths);
         let had_files = !files.is_empty();
