@@ -40,6 +40,13 @@ fn build_command() -> Command {
                 .help("Show hidden files (do not ignore entries starting with .)"),
         )
         .arg(
+            Arg::new("directory")
+                .short('d')
+                .long("directory")
+                .action(ArgAction::SetTrue)
+                .help("List directories themselves, not their contents"),
+        )
+        .arg(
             Arg::new("bylines")
                 .short('x')
                 .action(ArgAction::SetTrue)
@@ -54,9 +61,7 @@ fn parse_args() -> listare::Arguments {
     listare::Arguments {
         max_line_length: get_terminal_width().unwrap_or(80),
         paths: matches.get_many("files").unwrap().cloned().collect(),
-        // inputs: listare::InputFiles::from_args(
-        //     matches.get_many("files").unwrap().cloned().collect(),
-        // ),
+        list_dir_content: !matches.get_flag("directory"),
         show_hidden: matches.get_flag("all"),
         by_lines: matches.get_flag("bylines"),
     }

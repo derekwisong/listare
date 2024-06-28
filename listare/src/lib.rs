@@ -14,6 +14,7 @@ use tabulate::CharacterLength;
 pub struct Arguments {
     pub max_line_length: usize,
     pub paths: Vec<String>,
+    pub list_dir_content: bool,
     pub show_hidden: bool,
     pub by_lines: bool,
 }
@@ -166,27 +167,46 @@ fn list_dirs(args: &Arguments, headings: bool) -> Result<(), ListareError> {
     Ok(())
 }
 
+#[derive(Debug)]
 pub enum ListareError {
     Unknown,
     Generic(String),
 }
 
-pub fn run(args: &Arguments) -> Result<(), ListareError> {
-    if !args.inputs.files.is_empty() {
-        list_entries(args.inputs.files.clone(), args);
-    }
-
-    if !args.inputs.dirs.is_empty() {
-        // show headings when there are multiple dirs or files and one or more dirs
-        let had_files = !args.inputs.files.is_empty();
-
-        if had_files {
-            println!();
+impl std::error::Error for ListareError {}
+impl fmt::Display for ListareError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ListareError::Unknown => write!(f, "An unknown error occurred"),
+            ListareError::Generic(msg) => write!(f, "{}", msg),
         }
-
-        let headings: bool = had_files || (args.inputs.dirs.len() > 1);
-        list_dirs(args, headings)?;
     }
+}
 
+pub fn run(args: &Arguments) -> Result<(), ListareError> {
+    if args.list_dir_content {
+        if !args.inputs.files.is_empty() {
+            list_entries(args.inputs.files.clone(), args);
+        }
+    
+        if !args.inputs.dirs.is_empty() {
+            // show headings when there are multiple dirs or files and one or more dirs
+            let had_files = !args.inputs.files.is_empty();
+    
+            if had_files {
+                println!();
+            }
+    
+            let headings: bool = had_files || (args.inputs.dirs.len() > 1);
+            list_dirs(args, headings)?;
+        }
+    }
+    else {
+        let entries_iter = args.inputs.files.iter().chain(args.inputs.dirs.iter());
+        let entries: Vec<EntryData> = entries_iter.cloned().collect();
+        list_entries(entries, args);
+
+    }
+    
     Ok(())
 }
