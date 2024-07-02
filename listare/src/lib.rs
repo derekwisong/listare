@@ -1,9 +1,10 @@
 use std::{
-    fmt::{self, Display}, fs::{self, DirEntry, Metadata}, os::unix::fs::MetadataExt, path::PathBuf
+    fmt::{self, Display}, fs::{self, DirEntry, Metadata}, path::PathBuf
 };
 
 pub mod posix;
 mod tabulate;
+mod longformat;
 
 use colored::{ColoredString, Colorize};
 use tabulate::CharacterLength;
@@ -138,52 +139,13 @@ fn tabulate_entries(entries: &[EntryData], args: &Arguments) {
     );
 }
 
-fn longformat_tabulate_entries(entries: &[EntryData], _args: &Arguments) {
-    for entry in entries {
-        if entry.metadata.is_dir() {
-            print!("d");
-        } else {
-            print!("-");
-        }
-        // print -rwx items for user, group, and other users
-        for perm in &[
-            (0o400, 'r'),
-            (0o200, 'w'),
-            (0o100, 'x'),
-            (0o040, 'r'),
-            (0o020, 'w'),
-            (0o010, 'x'),
-            (0o004, 'r'),
-            (0o002, 'w'),
-            (0o001, 'x'),
-        ] {
-            if entry.metadata.mode() & perm.0 != 0 {
-                print!("{}", perm.1);
-            } else {
-                print!("-");
-            }
-        }
-        
 
-        let links = entry.metadata.nlink();
-        let user = users::get_user_by_uid(entry.metadata.uid()).map(|u| u.name().to_string_lossy().to_string()).unwrap_or_default();
-        let group = users::get_group_by_gid(entry.metadata.gid()).map(|g| g.name().to_string_lossy().to_string()).unwrap_or_default();
-        let size = if entry.metadata.is_dir() { 0 } else { entry.metadata.len() };  // TODO: should have a value for dirs
-        let name = entry.colored_name();
-        
-        let modified = entry.metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
-        let modified = modified.map(|t| chrono::DateTime::from_timestamp(t.as_secs() as i64, 0)).expect("Could not get modified time");
-        let modified = modified.map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()).unwrap_or_default();
-
-        println!(". {} {} {} {} {} {}", links, user, group, size, modified, name);
-    }
-}
 
 fn list_entries(mut entries: Vec<EntryData>, args: &Arguments) {
     entries.sort_by(|a, b| posix::strcoll(&a.name, &b.name));
 
     if args.long_format {
-        longformat_tabulate_entries(&entries, args);
+        longformat::longformat_tabulate_entries(&entries, args);
     } else {
         tabulate_entries(&entries, args);
     }
