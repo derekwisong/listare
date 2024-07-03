@@ -1,5 +1,16 @@
-[workspace]
-resolver = "2"
-members = [
-    "listare",
-]
+[package]
+name = "listare"
+version = "0.1.0"
+edition = "2021"
+default-run = "listare"
+
+[dependencies]
+chrono = "0.4.38"
+clap = "4.5.7"
+colored = "2.1.0"
+libc = "0.2.155"
+users = "0.11.0"
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+pretty_assertions = "1.4.0"
