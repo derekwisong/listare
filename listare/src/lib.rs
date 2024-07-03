@@ -1,5 +1,5 @@
 use std::{
-    fmt::{self, Display}, fs::{self, DirEntry, Metadata}, path::PathBuf
+    fmt::{self, Display}, fs::{self, DirEntry, Metadata}, path::{self, PathBuf}
 };
 
 pub mod posix;
@@ -28,9 +28,36 @@ struct EntryData {
 
 impl EntryData {
     fn from_path_str(path_str: &str) -> Result<Self, std::io::Error> {
-        let metadata = fs::metadata(&path_str)?;
-        let path = fs::canonicalize(&path_str)?;
-        let name = path_str.to_string();
+        let path = path::PathBuf::from(path_str);
+        let metadata = fs::symlink_metadata(&path)?;
+        Ok(EntryData {
+            metadata,
+            path,
+            name: path_str.to_string(),
+        })
+    }
+
+    fn from_relative_path(root: &path::Path, relpath: path::PathBuf) -> Result<Self, std::io::Error> {
+        let name = relpath
+            .file_name()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_string_lossy()
+            .to_string();
+        let abspath = root.join(&relpath);
+        Ok(EntryData {
+            metadata: fs::symlink_metadata(&abspath)?,
+            path: relpath,
+            name: name,
+        })
+    }
+
+    fn from_path(path: path::PathBuf) -> Result<Self, std::io::Error> {
+        let metadata = fs::symlink_metadata(&path)?;
+        let name = path
+            .file_name()
+            .ok_or(std::io::Error::from(std::io::ErrorKind::InvalidInput))?
+            .to_string_lossy()
+            .to_string();
         Ok(EntryData {
             metadata,
             path,
@@ -54,18 +81,26 @@ impl EntryData {
     }
 
     fn colored_name(&self) -> ColoredString {
+        self.colored(&self.name)
+    }
+
+    fn colored_path(&self) -> ColoredString {
+        self.colored(&self.path.to_string_lossy())
+    }
+
+    fn colored(&self, text: &str) -> ColoredString {
         if self.metadata.is_symlink() {
             let link_exists = fs::metadata(&self.path).is_ok();
 
             if link_exists {
-                self.name.bold().cyan()
+                text.bold().cyan()
             } else {
-                self.name.bold().red()
+                text.bold().red()
             }
         } else if self.metadata.is_dir() {
-            self.name.bold().blue()
+            text.bold().blue()
         } else {
-            self.name.normal()
+            text.normal()
         }
     }
 }
